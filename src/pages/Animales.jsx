@@ -5,15 +5,13 @@ import ModalMover from '../components/ModalMover'
 
 function Animales() {
   const [animales, setAnimales] = useState([])
-  const [filteredAnimales, setFilteredAnimales] = useState([])
-  const [search, setSearch] = useState('')
-  const [ubicacionFilter, setUbicacionFilter] = useState('')
-  const [peloFilter, setPeloFilter] = useState('')
+  const [filtered, setFiltered] = useState([])
+  const [filtro, setFiltro] = useState('todos')
+  const [busqueda, setBusqueda] = useState('')
+  const [expandedId, setExpandedId] = useState(null)
   const [selectedAnimal, setSelectedAnimal] = useState(null)
   const [showPesajeModal, setShowPesajeModal] = useState(false)
   const [showMoverModal, setShowMoverModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
-  const [editForm, setEditForm] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -21,8 +19,8 @@ function Animales() {
   }, [])
 
   useEffect(() => {
-    filterAnimales()
-  }, [animales, search, ubicacionFilter, peloFilter])
+    renderList()
+  }, [animales, filtro, busqueda])
 
   const fetchAnimales = async () => {
     setLoading(true)
@@ -40,39 +38,38 @@ function Animales() {
     setLoading(false)
   }
 
-  const filterAnimales = () => {
-    let filtered = animales
-
-    if (search) {
-      filtered = filtered.filter(animal =>
-        animal.num_visible.toString().includes(search) ||
-        animal.caravana2?.includes(search)
-      )
-    }
-
-    if (ubicacionFilter) {
-      filtered = filtered.filter(animal => animal.ubicacion === ubicacionFilter)
-    }
-
-    if (peloFilter) {
-      filtered = filtered.filter(animal => animal.pelo === peloFilter)
-    }
-
-    setFilteredAnimales(filtered)
+  const getFiltered = () => {
+    return animales.filter(a => {
+      const mf =
+        filtro === 'todos' ? true :
+        filtro === 'sinchip' ? a.observaciones === 'sin chip' :
+        filtro === 'Amarillo' ? a.caravana2 === 'Amarillo' :
+        filtro === 'Rojo' ? a.caravana2 === 'Rojo' :
+        a.ubicacion === filtro
+      if (!mf) return false
+      if (!busqueda) return true
+      return a.num_visible.toString().includes(busqueda) ||
+        a.ubicacion?.toLowerCase().includes(busqueda) ||
+        a.lote?.includes(busqueda) ||
+        a.caravana2?.toLowerCase().includes(busqueda)
+    })
   }
 
-  const handleRowClick = (animal) => {
-    setSelectedAnimal(animal)
-    setEditForm({ ...animal })
-    setShowEditModal(true)
+  const renderList = () => {
+    const filtered = getFiltered()
+    setFiltered(filtered)
   }
 
-  const handlePesaje = (animal) => {
+  const toggleDet = (id) => {
+    setExpandedId(expandedId === id ? null : id)
+  }
+
+  const openPeso = (animal) => {
     setSelectedAnimal(animal)
     setShowPesajeModal(true)
   }
 
-  const handleMover = (animal) => {
+  const openMover = (animal) => {
     setSelectedAnimal(animal)
     setShowMoverModal(true)
   }
@@ -80,234 +77,124 @@ function Animales() {
   const closeModals = () => {
     setShowPesajeModal(false)
     setShowMoverModal(false)
-    setShowEditModal(false)
     setSelectedAnimal(null)
-    setEditForm({})
     fetchAnimales()
   }
 
-  const handleSaveEdit = async () => {
-    const { error } = await supabase
-      .from('animales')
-      .update(editForm)
-      .eq('id', selectedAnimal.id)
-
-    if (error) {
-      console.error('Error updating animal:', error)
-      return
-    }
-
-    closeModals()
+  const setFilter = (btn) => {
+    document.querySelectorAll('.fbtn').forEach(b => b.classList.remove('active'))
+    btn.classList.add('active')
+    setFiltro(btn.dataset.f)
   }
 
-  const getStatusBadge = (animal) => {
-    if (animal.kg_hoy) {
-      return <span className="badge badge-primary">✓ Pesado</span>
-    }
-    return <span className="badge badge-red">⊘ Sin pesar</span>
+  const clearSearch = () => {
+    setBusqueda('')
   }
+
+  const exportCSV = () => {
+    const csv = [
+      ['NumVisible', 'NumCompleto', 'Caravana2', 'Ubicacion', 'Lote', 'KgIngreso', 'KgHoy', 'GananciaKg', 'Categoria', 'Obs'],
+      ...filtered.map(a => [
+        a.num_visible, a.id, a.caravana2, a.ubicacion, a.lote,
+        a.kg_ingreso || '', a.kg_hoy || '',
+        (a.kg_hoy && a.kg_ingreso) ? (a.kg_hoy - a.kg_ingreso).toFixed(1) : '',
+        a.categoria, a.observaciones || ''
+      ])
+    ].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'rodeo_filtrado.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  if (loading) {
+    return <div className="loading">Cargando animales...</div>
+  }
+
+  const toShow = filtered.slice(0, 200)
 
   return (
-    <div className="container">
-      <div style={{ padding: '20px 0 0 0' }}>
-        <h1>Animales</h1>
+    <>
+      <div className="sticky-ctrl">
+        <div className="srch-wrap">
+          <svg className="srch-ico" width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <circle cx="6" cy="6" r="4.5" stroke="#9A9A80" strokeWidth="1.3" />
+            <path d="M9.5 9.5l2.5 2.5" stroke="#9A9A80" strokeWidth="1.3" strokeLinecap="round" />
+          </svg>
+          <input
+            className="srch-input"
+            type="search"
+            placeholder="Número, lote, ubicación..."
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value.trim().toLowerCase())}
+          />
+          <span className="srch-clear" style={{ display: busqueda ? 'block' : 'none' }} onClick={clearSearch}>×</span>
+        </div>
+        <div className="fscroll">
+          <button className="fbtn active" data-f="todos" onClick={(e) => setFilter(e.target)}>Todos</button>
+          <button className="fbtn" data-f="Diego" onClick={(e) => setFilter(e.target)}>Diego</button>
+          <button className="fbtn" data-f="Granja" onClick={(e) => setFilter(e.target)}>Granja</button>
+          <button className="fbtn" data-f="Ruta" onClick={(e) => setFilter(e.target)}>Ruta</button>
+          <button className="fbtn" data-f="Maciel" onClick={(e) => setFilter(e.target)}>Maciel</button>
+          <button className="fbtn" data-f="Amarillo" onClick={(e) => setFilter(e.target)}>Amarillo</button>
+          <button className="fbtn" data-f="Rojo" onClick={(e) => setFilter(e.target)}>Rojo</button>
+          <button className="fbtn" data-f="sinchip" onClick={(e) => setFilter(e.target)}>Sin chip</button>
+        </div>
       </div>
-
-      {/* Filter Bar */}
-      <div className="filter-bar">
-        <input
-          type="text"
-          placeholder="🔍 Buscar por número o caravana..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
-        <select value={ubicacionFilter} onChange={(e) => setUbicacionFilter(e.target.value)}>
-          <option value="">Todas ubicaciones</option>
-          <option value="Diego">Diego</option>
-          <option value="Granja">Granja</option>
-          <option value="Ruta">Ruta</option>
-          <option value="Maciel">Maciel</option>
-        </select>
-        <select value={peloFilter} onChange={(e) => setPeloFilter(e.target.value)}>
-          <option value="">Todos colores</option>
-          <option value="HO">HO</option>
-          <option value="AB">AB</option>
-          <option value="HE">HE</option>
-          <option value="CR">CR</option>
-          <option value="otro">otro</option>
-        </select>
+      <div className="list-bar">
+        <span className="list-info">{filtered.length} animales</span>
+        <button className="export-btn" onClick={exportCSV}>Exportar CSV</button>
       </div>
-
-      {/* Results Count */}
-      {!loading && (
-        <div style={{
-          fontSize: '12px',
-          color: 'var(--text-secondary)',
-          marginBottom: '12px',
-          padding: '0 4px'
-        }}>
-          {filteredAnimales.length} animal{filteredAnimales.length !== 1 ? 'es' : ''} encontrado{filteredAnimales.length !== 1 ? 's' : ''}
-        </div>
-      )}
-
-      {/* Animals Table */}
-      {loading ? (
-        <div className="loading">Cargando animales...</div>
-      ) : filteredAnimales.length === 0 ? (
-        <div className="empty-state">
-          <p>No hay animales que coincidan con los filtros</p>
-        </div>
-      ) : (
-        <div className="table-container">
-          <table className="animales-table">
-            <thead>
-              <tr>
-                <th>NumVisible</th>
-                <th>Categoría</th>
-                <th>Pelo</th>
-                <th>Ubicación</th>
-                <th>Lote</th>
-                <th>2da Caravana</th>
-                <th>Observaciones</th>
-                <th>Kg Ingreso</th>
-                <th>Kg Hoy</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAnimales.map((animal, index) => (
-                <tr key={animal.id} onClick={() => handleRowClick(animal)} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
-                  <td>{animal.num_visible}</td>
-                  <td>{animal.categoria}</td>
-                  <td>{animal.pelo}</td>
-                  <td>{animal.ubicacion}</td>
-                  <td>{animal.lote}</td>
-                  <td>{animal.caravana2}</td>
-                  <td>{animal.observaciones || ''}</td>
-                  <td>{animal.kg_ingreso}</td>
-                  <td>{animal.kg_hoy || ''}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {/* Refresh Button */}
-      <button
-        className="btn"
-        onClick={fetchAnimales}
-        style={{ width: '100%', marginTop: '20px', marginBottom: '20px' }}
-      >
-        🔄 Actualizar
-      </button>
-
-      {/* Edit Modal */}
-      {showEditModal && (
-        <div className="modal">
-          <div className="modal-content">
-            <button className="close" onClick={closeModals}>×</button>
-            <h2>Editar Animal</h2>
-            <form onSubmit={(e) => { e.preventDefault(); handleSaveEdit(); }}>
-              <label>
-                NumVisible
-                <input
-                  type="number"
-                  value={editForm.num_visible || ''}
-                  onChange={(e) => setEditForm({ ...editForm, num_visible: e.target.value })}
-                />
-              </label>
-              <label>
-                Categoría
-                <select
-                  value={editForm.categoria || ''}
-                  onChange={(e) => setEditForm({ ...editForm, categoria: e.target.value })}
-                >
-                  <option value="Novillo">Novillo</option>
-                  <option value="Novillito">Novillito</option>
-                  <option value="Vaquillona">Vaquillona</option>
-                  <option value="Vaca">Vaca</option>
-                  <option value="Toro">Toro</option>
-                </select>
-              </label>
-              <label>
-                Pelo
-                <select
-                  value={editForm.pelo || ''}
-                  onChange={(e) => setEditForm({ ...editForm, pelo: e.target.value })}
-                >
-                  <option value="HO">HO</option>
-                  <option value="AB">AB</option>
-                  <option value="HE">HE</option>
-                  <option value="CR">CR</option>
-                  <option value="otro">otro</option>
-                </select>
-              </label>
-              <label>
-                Ubicación
-                <select
-                  value={editForm.ubicacion || ''}
-                  onChange={(e) => setEditForm({ ...editForm, ubicacion: e.target.value })}
-                >
-                  <option value="Diego">Diego</option>
-                  <option value="Granja">Granja</option>
-                  <option value="Ruta">Ruta</option>
-                  <option value="Maciel">Maciel</option>
-                </select>
-              </label>
-              <label>
-                Lote
-                <input
-                  type="text"
-                  value={editForm.lote || ''}
-                  onChange={(e) => setEditForm({ ...editForm, lote: e.target.value })}
-                />
-              </label>
-              <label>
-                2da Caravana
-                <select
-                  value={editForm.caravana2 || ''}
-                  onChange={(e) => setEditForm({ ...editForm, caravana2: e.target.value })}
-                >
-                  <option value="Amarillo">Amarillo</option>
-                  <option value="Rojo">Rojo</option>
-                </select>
-              </label>
-              <label>
-                Observaciones
-                <textarea
-                  value={editForm.observaciones || ''}
-                  onChange={(e) => setEditForm({ ...editForm, observaciones: e.target.value })}
-                />
-              </label>
-              <label>
-                Kg Ingreso
-                <input
-                  type="number"
-                  value={editForm.kg_ingreso || ''}
-                  onChange={(e) => setEditForm({ ...editForm, kg_ingreso: e.target.value })}
-                />
-              </label>
-              <label>
-                Kg Hoy
-                <input
-                  type="number"
-                  value={editForm.kg_hoy || ''}
-                  onChange={(e) => setEditForm({ ...editForm, kg_hoy: e.target.value })}
-                />
-              </label>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
-                <button type="submit" className="btn">Guardar</button>
-                <button type="button" className="btn btn-secondary" onClick={closeModals}>Cancelar</button>
-                <button type="button" className="btn" onClick={() => { closeModals(); handlePesaje(selectedAnimal); }}>Registrar pesaje</button>
+      <div className="a-list">
+        {toShow.length === 0 ? (
+          <div className="empty">Sin resultados.</div>
+        ) : (
+          toShow.map(a => {
+            const bc = a.caravana2 === 'Amarillo' ? 'b-am' : 'b-ro'
+            const init = a.num_visible.toString().slice(-4)
+            const gan = a.kg_hoy && a.kg_ingreso ? '+' + (a.kg_hoy - a.kg_ingreso).toFixed(1) + ' kg' : ''
+            return (
+              <div key={a.id} className="a-card">
+                <div className="a-main" onClick={() => toggleDet(a.id)}>
+                  <div className="a-badge {bc}">{init}</div>
+                  <div className="a-info">
+                    <div className="a-num">{a.num_visible}</div>
+                    <div className="a-meta">Lote {a.lote} · {a.caravana2}{a.observaciones ? ' · ' + a.observaciones : ''}</div>
+                  </div>
+                  <div className="a-right">
+                    {a.kg_hoy ? <div className="a-kg">{a.kg_hoy}<span className="a-kg-u"> kg</span></div> : ''}
+                    <div className="a-ubic">{a.ubicacion}</div>
+                  </div>
+                </div>
+                <div className={`a-det ${expandedId === a.id ? 'open' : ''}`}>
+                  {gan ? <div className="gain-row"><span className="gain-lbl">Ganancia estimada</span><span className="gain-val">{gan}</span></div> : ''}
+                  <div className="dg">
+                    <div><div className="di-lbl">N° completo</div><div className="di-val" style={{ fontSize: '11px' }}>{a.id}</div></div>
+                    <div><div className="di-lbl">Caravana 2</div><div className="di-val">{a.caravana2 || '—'}</div></div>
+                    <div><div className="di-lbl">Ubicación</div><div className="di-val">{a.ubicacion || '—'}</div></div>
+                    <div><div className="di-lbl">Lote compra</div><div className="di-val">{a.lote || '—'}</div></div>
+                    <div><div className="di-lbl">Kg ingreso</div><div className="di-val">{a.kg_ingreso ? a.kg_ingreso + ' kg' : '—'}</div></div>
+                    <div><div className="di-lbl">Kg hoy</div><div className="di-val">{a.kg_hoy ? a.kg_hoy + ' kg' : '—'}</div></div>
+                  </div>
+                  {a.observaciones ? <div className="obs-row">Obs: {a.observaciones}</div> : ''}
+                  <div className="det-actions">
+                    <button className="det-btn primary" onClick={() => openPeso(a)}>+ Pesaje</button>
+                    <button className="det-btn" onClick={() => openMover(a)}>Mover</button>
+                  </div>
+                </div>
               </div>
-            </form>
-          </div>
-        </div>
-      )}
+            )
+          })
+        )}
+        {filtered.length > 200 && <div style={{ textAlign: 'center', padding: '14px', fontSize: '12px', color: 'var(--text3)' }}>Mostrando 200 de {filtered.length}. Usá el buscador para filtrar.</div>}
+      </div>
 
       {showPesajeModal && <ModalPesaje animal={selectedAnimal} onClose={closeModals} />}
       {showMoverModal && <ModalMover animal={selectedAnimal} onClose={closeModals} />}
-    </div>
+    </>
   )
 }
 

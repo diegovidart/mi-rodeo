@@ -2,22 +2,27 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 function Dashboard() {
-  const [metrics, setMetrics] = useState({
+  const [data, setData] = useState({
     total: 0,
-    byUbicacion: {},
-    byLote: {}
+    amCnt: 0,
+    roCnt: 0,
+    ubicMap: {},
+    loteMap: {},
+    avgIngreso: 0,
+    avgHoy: 0,
+    ganancia: 0
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchMetrics()
+    buildDash()
   }, [])
 
-  const fetchMetrics = async () => {
+  const buildDash = async () => {
     setLoading(true)
     const { data: animals, error } = await supabase
       .from('animales')
-      .select('ubicacion, lote, categoria')
+      .select('*')
 
     if (error) {
       console.error(error)
@@ -26,110 +31,100 @@ function Dashboard() {
     }
 
     const total = animals.length
-    const byUbicacion = animals.reduce((acc, animal) => {
-      acc[animal.ubicacion] = (acc[animal.ubicacion] || 0) + 1
-      return acc
-    }, {})
+    let amCnt = 0, roCnt = 0
+    const ubicMap = {}
+    const loteMap = {}
+    const kgsI = [], kgsH = []
 
-    const byLote = animals.reduce((acc, animal) => {
-      acc[animal.lote] = (acc[animal.lote] || 0) + 1
-      return acc
-    }, {})
+    animals.forEach(a => {
+      if (a.ubicacion) ubicMap[a.ubicacion] = (ubicMap[a.ubicacion] || 0) + 1
+      if (a.lote) loteMap[a.lote] = (loteMap[a.lote] || 0) + 1
+      if (a.caravana2 === 'Amarillo') amCnt++
+      else if (a.caravana2 === 'Rojo') roCnt++
+      if (a.kg_ingreso) kgsI.push(a.kg_ingreso)
+      if (a.kg_hoy) kgsH.push(a.kg_hoy)
+    })
 
-    setMetrics({ total, byUbicacion, byLote })
+    const avgIngreso = kgsI.length ? (kgsI.reduce((s, k) => s + k, 0) / kgsI.length).toFixed(1) : '—'
+    const avgHoy = kgsH.length ? (kgsH.reduce((s, k) => s + k, 0) / kgsH.length).toFixed(1) : '—'
+    const ganancia = (avgIngreso !== '—' && avgHoy !== '—') ? '+' + (parseFloat(avgHoy) - parseFloat(avgIngreso)).toFixed(1) + ' kg' : '—'
+
+    setData({ total, amCnt, roCnt, ubicMap, loteMap, avgIngreso, avgHoy, ganancia })
     setLoading(false)
   }
 
-  const getTopUbicacion = () => {
-    const entries = Object.entries(metrics.byUbicacion)
-    if (entries.length === 0) return { name: 'N/A', count: 0 }
-    return {
-      name: entries.reduce((a, b) => a[1] > b[1] ? a : b)[0],
-      count: Math.max(...entries.map(e => e[1]))
-    }
+  if (loading) {
+    return <div className="loading">Cargando...</div>
   }
 
-  const topUbicacion = getTopUbicacion()
-
   return (
-    <div className="container">
-      <div style={{ padding: '20px 0 0 0' }}>
-        <h1>Dashboard</h1>
+    <>
+      <div className="dash-hdr">
+        <div className="dash-title">Rodeo al día</div>
+        <div className="metrics">
+          <div className="metric">
+            <div className="metric-lbl">Total</div>
+            <div className="metric-val">{data.total}</div>
+            <div className="metric-sub">animales</div>
+          </div>
+          <div className="metric">
+            <div className="metric-lbl">Promedio</div>
+            <div className="metric-val">{data.avgIngreso}<span className="u"> kg</span></div>
+            <div className="metric-sub">ingreso</div>
+          </div>
+          <div className="metric">
+            <div className="metric-lbl">Promedio</div>
+            <div className="metric-val">{data.avgHoy}<span className="u"> kg</span></div>
+            <div className="metric-sub">hoy</div>
+          </div>
+          <div className="metric">
+            <div className="metric-lbl">Ganancia</div>
+            <div className="metric-val">{data.ganancia}</div>
+            <div className="metric-sub">promedio</div>
+          </div>
+        </div>
       </div>
-
-      {loading ? (
-        <div className="loading">Cargando datos...</div>
-      ) : (
-        <>
-          {/* Metrics Grid 2x2 */}
-          <div className="metrics-grid">
-            <div className="metric-card">
-              <div className="metric-value">{metrics.total}</div>
-              <div className="metric-label">Total Animales</div>
+      <div className="dash-body">
+        <div className="sec-title">Por ubicación</div>
+        <div className="ubic-grid">
+          {Object.entries(data.ubicMap).map(([u, c]) => (
+            <div key={u} className="ubic-card">
+              <div className="ubic-name">{u}</div>
+              <div className="ubic-cnt">{c}</div>
+              <div className="ubic-sub">animales</div>
             </div>
-
-            <div className="metric-card">
-              <div className="metric-value">{Object.keys(metrics.byUbicacion).length}</div>
-              <div className="metric-label">Ubicaciones</div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-value">{topUbicacion.name}</div>
-              <div className="metric-label">Ubicación Más Poblada</div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-value">{Object.keys(metrics.byLote).length}</div>
-              <div className="metric-label">Lotes Registrados</div>
-            </div>
+          ))}
+        </div>
+        <div className="sec-title">Por caravana</div>
+        <div className="car-row">
+          <div className="car-pill am">
+            <div className="car-lbl am">Amarillos</div>
+            <div className="car-cnt am" id="cntAm">{data.amCnt}</div>
           </div>
-
-          {/* Locations Section */}
-          <h2 style={{ marginTop: '24px' }}>Por Ubicación</h2>
-          <div className="stats-section">
-            <div className="stats-list">
-              {Object.entries(metrics.byUbicacion).map(([ubicacion, count]) => (
-                <div key={ubicacion} className="stat-item">
-                  <div className="stat-value">{count}</div>
-                  <div className="stat-label">{ubicacion}</div>
+          <div className="car-pill ro">
+            <div className="car-lbl ro">Rojos</div>
+            <div className="car-cnt ro" id="cntRo">{data.roCnt}</div>
+          </div>
+        </div>
+        <div className="sec-title">Por lote</div>
+        <div className="lote-list">
+          {Object.entries(data.loteMap).sort((a, b) => b[1] - a[1]).map(([l, c]) => {
+            const max = Math.max(...Object.values(data.loteMap))
+            const pct = (c / max) * 100
+            return (
+              <div key={l} className="lote-row">
+                <div className="lote-num">{l}</div>
+                <div className="lote-bar-w">
+                  <div className="lote-bar" style={{ width: `${pct}%` }}></div>
                 </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Lots Section */}
-          <h2>Por Lote</h2>
-          <div className="card">
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              {Object.entries(metrics.byLote).map(([lote, count]) => (
-                <div key={lote} style={{
-                  padding: '12px',
-                  backgroundColor: 'var(--green-pale)',
-                  borderRadius: '8px',
-                  textAlign: 'center'
-                }}>
-                  <div style={{ fontSize: '18px', fontWeight: '700', color: 'var(--accent-primary)' }}>
-                    {count}
-                  </div>
-                  <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '4px' }}>
-                    {lote}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Refresh Button */}
-          <button
-            className="btn"
-            onClick={fetchMetrics}
-            style={{ width: '100%', marginTop: '20px', marginBottom: '20px' }}
-          >
-            🔄 Actualizar
-          </button>
-        </>
-      )}
-    </div>
+                <div className="lote-cnt">{c}</div>
+                <div className="lote-kg">animales</div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </>
   )
 }
 

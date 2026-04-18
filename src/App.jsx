@@ -5,52 +5,36 @@ import Animales from './pages/Animales'
 import Resumen from './pages/Resumen'
 
 function App() {
-  const [currentTab, setCurrentTab] = useState('dashboard')
+  const [currentPage, setCurrentPage] = useState('dash')
 
-  const renderTab = () => {
-    switch (currentTab) {
-      case 'dashboard':
-        return <Dashboard />
-      case 'animales':
-        return <Animales />
-      case 'resumen':
-        return <Resumen />
-      default:
-        return <Dashboard />
-    }
+  const showPage = (page, tabElement) => {
+    setCurrentPage(page)
+    document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'))
+    tabElement.classList.add('active')
   }
 
   return (
-    <div className="App">
-      <div className="main-content">
-        {renderTab()}
+    <div>
+      <div className="nav">
+        <div className="nav-brand">Mi<span>Rodeo</span></div>
+        <div className={`nav-tab ${currentPage === 'dash' ? 'active' : ''}`} onClick={(e) => showPage('dash', e.target)}>Inicio</div>
+        <div className={`nav-tab ${currentPage === 'animales' ? 'active' : ''}`} onClick={(e) => showPage('animales', e.target)}>Animales</div>
+        <div className={`nav-tab ${currentPage === 'resumen' ? 'active' : ''}`} onClick={(e) => showPage('resumen', e.target)}>Resumen</div>
       </div>
-      <div className="tab-bar">
-        <button
-          className={currentTab === 'dashboard' ? 'active' : ''}
-          onClick={() => setCurrentTab('dashboard')}
-          title="Dashboard"
-        >
-          <span style={{ fontSize: '24px' }}>📊</span>
-          <span>Dashboard</span>
-        </button>
-        <button
-          className={currentTab === 'animales' ? 'active' : ''}
-          onClick={() => setCurrentTab('animales')}
-          title="Animales"
-        >
-          <span style={{ fontSize: '24px' }}>🐄</span>
-          <span>Animales</span>
-        </button>
-        <button
-          className={currentTab === 'resumen' ? 'active' : ''}
-          onClick={() => setCurrentTab('resumen')}
-          title="Resumen"
-        >
-          <span style={{ fontSize: '24px' }}>📈</span>
-          <span>Resumen</span>
-        </button>
+
+      <div className={`page ${currentPage === 'dash' ? 'active' : ''}`}>
+        <Dashboard />
       </div>
+
+      <div className={`page ${currentPage === 'animales' ? 'active' : ''}`}>
+        <Animales />
+      </div>
+
+      <div className={`page ${currentPage === 'resumen' ? 'active' : ''}`}>
+        <Resumen />
+      </div>
+
+      <div className="toast" id="toast"></div>
     </div>
   )
 }

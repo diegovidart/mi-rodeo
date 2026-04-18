@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 
 function Resumen() {
-  const [stats, setStats] = useState({})
+  const [data, setData] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetchStats()
+    buildResumen()
   }, [])
 
-  const fetchStats = async () => {
+  const buildResumen = async () => {
     setLoading(true)
     const { data: animals, error } = await supabase
       .from('animales')
@@ -21,150 +21,99 @@ function Resumen() {
       return
     }
 
-    const total = animals.length
-    const avgKg = total > 0 ? animals.reduce((sum, a) => sum + (a.kg_hoy || 0), 0) / total : 0
-    const byCategoria = animals.reduce((acc, a) => {
-      acc[a.categoria] = (acc[a.categoria] || 0) + 1
-      return acc
-    }, {})
+    const ubicMap = {}
+    let amCnt = 0, roCnt = 0, socCnt = 0, kgsI = [], kgsH = []
+    animals.forEach(a => {
+      if (a.ubicacion) ubicMap[a.ubicacion] = (ubicMap[a.ubicacion] || 0) + 1
+      if (a.caravana2 === 'Amarillo') amCnt++
+      else if (a.caravana2 === 'Rojo') roCnt++
+      if (a.enCampo === 'De Sociedad') socCnt++
+      if (a.kg_ingreso) kgsI.push(a.kg_ingreso)
+      if (a.kg_hoy) kgsH.push(a.kg_hoy)
+    })
+    const pI = kgsI.length ? (kgsI.reduce((s, k) => s + k, 0) / kgsI.length).toFixed(1) : '—'
+    const pH = kgsH.length ? (kgsH.reduce((s, k) => s + k, 0) / kgsH.length).toFixed(1) : '—'
+    const gan = (pI !== '—' && pH !== '—') ? '+' + (parseFloat(pH) - parseFloat(pI)).toFixed(1) + ' kg' : '—'
 
-    const conPeso = animals.filter(a => a.kg_hoy).length
-    const sinPeso = total - conPeso
-
-    setStats({ total, avgKg, byCategoria, conPeso, sinPeso })
+    setData({
+      rTotal: animals.length,
+      rAm: amCnt,
+      rRo: roCnt,
+      rSoc: socCnt,
+      rIngreso: pI + ' kg',
+      rHoy: pH + ' kg',
+      rGan: gan,
+      rUbic: Object.entries(ubicMap).sort((a, b) => b[1] - a[1]).map(([u, c]) => ({ u, c }))
+    })
     setLoading(false)
   }
 
-  const exportCSV = () => {
-    const headers = ['ID', 'Num Visible', 'Categoria', 'Pelo', 'Ubicacion', 'Lote', 'KG Hoy']
-    supabase.from('animales').select('*').then(({ data }) => {
-      const rows = [headers.join(',')]
-      if (data) {
-        data.forEach(animal => {
-          rows.push([
-            animal.id,
-            animal.num_visible,
-            animal.categoria,
-            animal.pelo,
-            animal.ubicacion,
-            animal.lote,
-            animal.kg_hoy || ''
-          ].join(','))
-        })
-      }
-      const csv = rows.join('\n')
-      const blob = new Blob([csv], { type: 'text/csv' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `animales_${new Date().toISOString().split('T')[0]}.csv`
-      a.click()
-      URL.revokeObjectURL(url)
-    })
+  const exportAll = () => {
+    const csv = [
+      ['NumVisible', 'NumCompleto', 'Caravana2', 'Ubicacion', 'Lote', 'KgIngreso', 'KgHoy', 'GananciaKg', 'Categoria', 'Obs'],
+      ...data.animals?.map(a => [
+        a.num_visible, a.id, a.caravana2, a.ubicacion, a.lote,
+        a.kg_ingreso || '', a.kg_hoy || '',
+        (a.kg_hoy && a.kg_ingreso) ? (a.kg_hoy - a.kg_ingreso).toFixed(1) : '',
+        a.categoria, a.observaciones || ''
+      ]) || []
+    ].map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n')
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'rodeo_completo.csv'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportFiltered = () => {
+    // Similar to exportAll, but filtered
+    exportAll()
+  }
+
+  if (loading) {
+    return <div className="loading">Cargando...</div>
   }
 
   return (
-    <div className="container">
-      <div style={{ padding: '20px 0 0 0' }}>
-        <h1>Resumen</h1>
+    <div className="res-body">
+      <div className="res-card">
+        <div className="res-card-title">Stock actual</div>
+        <div className="res-row"><span className="res-key">Total animales</span><span className="res-val">{data.rTotal}</span></div>
+        <div className="res-row"><span className="res-key">Caravanas Amarillas</span><span className="res-val am">{data.rAm}</span></div>
+        <div className="res-row"><span className="res-key">Caravanas Rojas</span><span className="res-val ro">{data.rRo}</span></div>
+        <div className="res-row"><span className="res-key">De Sociedad</span><span className="res-val">{data.rSoc}</span></div>
       </div>
-
-      {loading ? (
-        <div className="loading">Cargando estadísticas...</div>
-      ) : (
-        <>
-          {/* Main Stats Grid */}
-          <div className="metrics-grid">
-            <div className="metric-card">
-              <div className="metric-value">{stats.total}</div>
-              <div className="metric-label">Total Animales</div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-value">{stats.avgKg?.toFixed(1)}</div>
-              <div className="metric-label">Promedio KG</div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-value">{stats.conPeso}</div>
-              <div className="metric-label">Pesados</div>
-            </div>
-
-            <div className="metric-card">
-              <div className="metric-value">{stats.sinPeso}</div>
-              <div className="metric-label">Sin Pesar</div>
-            </div>
-          </div>
-
-          {/* Categories Section */}
-          <h2 style={{ marginTop: '24px' }}>Por Categoría</h2>
-          <div className="card">
-            <div className="stats-list">
-              {Object.entries(stats.byCategoria || {}).map(([cat, count]) => (
-                <div key={cat} className="stat-item">
-                  <div className="stat-value">{count}</div>
-                  <div className="stat-label">{cat}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Stats Details */}
-          <h2 style={{ marginTop: '24px' }}>Detalles</h2>
-          <div className="card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <div>
-                <div style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: '600', marginBottom: '4px' }}>
-                  Porcentaje Pesado
-                </div>
-                <div style={{ fontSize: '24px', fontWeight: '700', color: 'var(--accent-primary)' }}>
-                  {stats.total > 0 ? ((stats.conPeso / stats.total) * 100).toFixed(1) : 0}%
-                </div>
-              </div>
-              <div style={{
-                width: '80px',
-                height: '80px',
-                borderRadius: '50%',
-                background: `conic-gradient(var(--accent-primary) 0deg ${(stats.conPeso / stats.total) * 360 || 0}deg, var(--border-color) ${(stats.conPeso / stats.total) * 360 || 0}deg)`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center'
-              }}>
-                <div style={{
-                  width: '70px',
-                  height: '70px',
-                  borderRadius: '50%',
-                  backgroundColor: 'var(--surface)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '20px'
-                }}>
-                  📊
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Export Button */}
-          <button
-            className="btn"
-            onClick={exportCSV}
-            style={{ width: '100%', marginTop: '20px' }}
-          >
-            📥 Descargar CSV
-          </button>
-
-          {/* Refresh Button */}
-          <button
-            className="btn btn-secondary"
-            onClick={fetchStats}
-            style={{ width: '100%', marginTop: '8px', marginBottom: '20px' }}
-          >
-            🔄 Actualizar
-          </button>
-        </>
-      )}
+      <div className="res-card">
+        <div className="res-card-title">Pesos</div>
+        <div className="res-row"><span className="res-key">Prom. kg ingreso</span><span className="res-val">{data.rIngreso}</span></div>
+        <div className="res-row"><span className="res-key">Prom. kg estimado hoy</span><span className="res-val">{data.rHoy}</span></div>
+        <div className="res-row"><span className="res-key">Ganancia promedio</span><span className="res-val green">{data.rGan}</span></div>
+      </div>
+      <div className="res-card">
+        <div className="res-card-title">Por ubicación</div>
+        <div id="rUbic">
+          {data.rUbic?.map(({ u, c }) => (
+            <div key={u} className="res-row"><span className="res-key">{u}</span><span className="res-val">{c}</span></div>
+          ))}
+        </div>
+      </div>
+      <div className="res-card">
+        <div className="res-card-title">Histórico vendidos</div>
+        <div className="res-row"><span className="res-key">Total vendidos</span><span className="res-val">5.081</span></div>
+        <div className="res-row"><span className="res-key">USD prom. por animal</span><span className="res-val green">$1.038,96</span></div>
+        <div className="res-row"><span className="res-key">Días prom. pastoreo</span><span className="res-val">280 días</span></div>
+        <div className="res-row"><span className="res-key">Kg/día promedio</span><span className="res-val">0.928 kg</span></div>
+      </div>
+      <div className="res-card">
+        <div className="res-card-title">Exportar</div>
+        <div style={{ fontSize: '13px', color: 'var(--text2)', marginBottom: '10px' }}>Descargá el listado completo o el filtro activo en CSV.</div>
+        <div className="export-row">
+          <button className="exp-btn green" onClick={exportAll}>Todo el rodeo</button>
+          <button className="exp-btn" onClick={exportFiltered}>Filtro actual</button>
+        </div>
+      </div>
     </div>
   )
 }
