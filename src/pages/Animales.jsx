@@ -12,7 +12,8 @@ function Animales() {
   const [selectedAnimal, setSelectedAnimal] = useState(null)
   const [showPesajeModal, setShowPesajeModal] = useState(false)
   const [showMoverModal, setShowMoverModal] = useState(false)
-  const [expandedId, setExpandedId] = useState(null)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editForm, setEditForm] = useState({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -60,6 +61,12 @@ function Animales() {
     setFilteredAnimales(filtered)
   }
 
+  const handleRowClick = (animal) => {
+    setSelectedAnimal(animal)
+    setEditForm({ ...animal })
+    setShowEditModal(true)
+  }
+
   const handlePesaje = (animal) => {
     setSelectedAnimal(animal)
     setShowPesajeModal(true)
@@ -73,12 +80,24 @@ function Animales() {
   const closeModals = () => {
     setShowPesajeModal(false)
     setShowMoverModal(false)
+    setShowEditModal(false)
     setSelectedAnimal(null)
+    setEditForm({})
     fetchAnimales()
   }
 
-  const toggleExpanded = (id) => {
-    setExpandedId(expandedId === id ? null : id)
+  const handleSaveEdit = async () => {
+    const { error } = await supabase
+      .from('animales')
+      .update(editForm)
+      .eq('id', selectedAnimal.id)
+
+    if (error) {
+      console.error('Error updating animal:', error)
+      return
+    }
+
+    closeModals()
   }
 
   const getStatusBadge = (animal) => {
@@ -111,10 +130,11 @@ function Animales() {
         </select>
         <select value={peloFilter} onChange={(e) => setPeloFilter(e.target.value)}>
           <option value="">Todos colores</option>
-          <option value="Negro">Negro</option>
-          <option value="Blanco">Blanco</option>
-          <option value="Gris">Gris</option>
-          <option value="Rojo">Rojo</option>
+          <option value="HO">HO</option>
+          <option value="AB">AB</option>
+          <option value="HE">HE</option>
+          <option value="CR">CR</option>
+          <option value="otro">otro</option>
         </select>
       </div>
 
@@ -130,7 +150,7 @@ function Animales() {
         </div>
       )}
 
-      {/* Animals List */}
+      {/* Animals Table */}
       {loading ? (
         <div className="loading">Cargando animales...</div>
       ) : filteredAnimales.length === 0 ? (
@@ -138,62 +158,37 @@ function Animales() {
           <p>No hay animales que coincidan con los filtros</p>
         </div>
       ) : (
-        <div>
-          {filteredAnimales.map(animal => (
-            <div key={animal.id} className="animal-card">
-              <div
-                className="animal-card-header"
-                onClick={() => toggleExpanded(animal.id)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                  <span className="animal-number">#{animal.num_visible}</span>
-                  <span className="animal-category">{animal.categoria}</span>
-                  <div style={{ marginLeft: 'auto' }}>
-                    {getStatusBadge(animal)}
-                  </div>
-                </div>
-                <span className={`expand-icon ${expandedId === animal.id ? 'open' : ''}`}>
-                  ▼
-                </span>
-              </div>
-
-              <div className={`animal-card-content ${expandedId === animal.id ? 'open' : ''}`}>
-                <div className="info-row">
-                  <span className="info-label">Pelo</span>
-                  <span className="info-value">{animal.pelo}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Ubicación</span>
-                  <span className="info-value">{animal.ubicacion}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">Lote</span>
-                  <span className="info-value">{animal.lote}</span>
-                </div>
-                <div className="info-row">
-                  <span className="info-label">KG Hoy</span>
-                  <span className="info-value">{animal.kg_hoy || '—'}</span>
-                </div>
-                {animal.caravana2 && (
-                  <>
-                    <div className="info-row">
-                      <span className="info-label">Caravana</span>
-                      <span className="info-value">{animal.caravana2}</span>
-                    </div>
-                  </>
-                )}
-
-                <div className="animal-card-actions" style={{ gridColumn: '1 / -1', marginTop: '8px' }}>
-                  <button className="btn" onClick={() => handlePesaje(animal)}>
-                    ⚖️ Pesaje
-                  </button>
-                  <button className="btn btn-secondary" onClick={() => handleMover(animal)}>
-                    📍 Mover
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="table-container">
+          <table className="animales-table">
+            <thead>
+              <tr>
+                <th>NumVisible</th>
+                <th>Categoría</th>
+                <th>Pelo</th>
+                <th>Ubicación</th>
+                <th>Lote</th>
+                <th>2da Caravana</th>
+                <th>Observaciones</th>
+                <th>Kg Ingreso</th>
+                <th>Kg Hoy</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredAnimales.map((animal, index) => (
+                <tr key={animal.id} onClick={() => handleRowClick(animal)} className={index % 2 === 0 ? 'even-row' : 'odd-row'}>
+                  <td>{animal.num_visible}</td>
+                  <td>{animal.categoria}</td>
+                  <td>{animal.pelo}</td>
+                  <td>{animal.ubicacion}</td>
+                  <td>{animal.lote}</td>
+                  <td>{animal.caravana2}</td>
+                  <td>{animal.observaciones || ''}</td>
+                  <td>{animal.kg_ingreso}</td>
+                  <td>{animal.kg_hoy || ''}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
@@ -205,6 +200,110 @@ function Animales() {
       >
         🔄 Actualizar
       </button>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+        <div className="modal">
+          <div className="modal-content">
+            <button className="close" onClick={closeModals}>×</button>
+            <h2>Editar Animal</h2>
+            <form onSubmit={(e) => { e.preventDefault(); handleSaveEdit(); }}>
+              <label>
+                NumVisible
+                <input
+                  type="number"
+                  value={editForm.num_visible || ''}
+                  onChange={(e) => setEditForm({ ...editForm, num_visible: e.target.value })}
+                />
+              </label>
+              <label>
+                Categoría
+                <select
+                  value={editForm.categoria || ''}
+                  onChange={(e) => setEditForm({ ...editForm, categoria: e.target.value })}
+                >
+                  <option value="Novillo">Novillo</option>
+                  <option value="Novillito">Novillito</option>
+                  <option value="Vaquillona">Vaquillona</option>
+                  <option value="Vaca">Vaca</option>
+                  <option value="Toro">Toro</option>
+                </select>
+              </label>
+              <label>
+                Pelo
+                <select
+                  value={editForm.pelo || ''}
+                  onChange={(e) => setEditForm({ ...editForm, pelo: e.target.value })}
+                >
+                  <option value="HO">HO</option>
+                  <option value="AB">AB</option>
+                  <option value="HE">HE</option>
+                  <option value="CR">CR</option>
+                  <option value="otro">otro</option>
+                </select>
+              </label>
+              <label>
+                Ubicación
+                <select
+                  value={editForm.ubicacion || ''}
+                  onChange={(e) => setEditForm({ ...editForm, ubicacion: e.target.value })}
+                >
+                  <option value="Diego">Diego</option>
+                  <option value="Granja">Granja</option>
+                  <option value="Ruta">Ruta</option>
+                  <option value="Maciel">Maciel</option>
+                </select>
+              </label>
+              <label>
+                Lote
+                <input
+                  type="text"
+                  value={editForm.lote || ''}
+                  onChange={(e) => setEditForm({ ...editForm, lote: e.target.value })}
+                />
+              </label>
+              <label>
+                2da Caravana
+                <select
+                  value={editForm.caravana2 || ''}
+                  onChange={(e) => setEditForm({ ...editForm, caravana2: e.target.value })}
+                >
+                  <option value="Amarillo">Amarillo</option>
+                  <option value="Rojo">Rojo</option>
+                </select>
+              </label>
+              <label>
+                Observaciones
+                <textarea
+                  value={editForm.observaciones || ''}
+                  onChange={(e) => setEditForm({ ...editForm, observaciones: e.target.value })}
+                />
+              </label>
+              <label>
+                Kg Ingreso
+                <input
+                  type="number"
+                  value={editForm.kg_ingreso || ''}
+                  onChange={(e) => setEditForm({ ...editForm, kg_ingreso: e.target.value })}
+                />
+              </label>
+              <label>
+                Kg Hoy
+                <input
+                  type="number"
+                  value={editForm.kg_hoy || ''}
+                  onChange={(e) => setEditForm({ ...editForm, kg_hoy: e.target.value })}
+                />
+              </label>
+              <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>
+                <button type="submit" className="btn">Guardar</button>
+                <button type="button" className="btn btn-secondary" onClick={closeModals}>Cancelar</button>
+                <button type="button" className="btn" onClick={() => { closeModals(); handlePesaje(selectedAnimal); }}>Registrar pesaje</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {showPesajeModal && <ModalPesaje animal={selectedAnimal} onClose={closeModals} />}
       {showMoverModal && <ModalMover animal={selectedAnimal} onClose={closeModals} />}

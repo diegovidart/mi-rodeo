@@ -505,3 +505,61 @@ textarea {
     grid-template-columns: 1fr;
   }
 }
+
+/* Animals Table */
+.table-container {
+  overflow-x: auto;
+  border-radius: 12px;
+  border: 1px solid var(--border-color);
+  background-color: var(--surface);
+  margin-bottom: 16px;
+}
+
+.animales-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.animales-table th {
+  background-color: var(--surface);
+  color: var(--text-primary);
+  font-weight: 600;
+  padding: 12px 8px;
+  text-align: left;
+  border-bottom: 2px solid var(--border-color);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.animales-table td {
+  padding: 12px 8px;
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.animales-table tr:hover td {
+  background-color: var(--green-pale);
+}
+
+.animales-table .even-row {
+  background-color: var(--surface);
+}
+
+.animales-table .odd-row {
+  background-color: rgba(42, 77, 18, 0.02);
+}
+
+@media (max-width: 768px) {
+  .animales-table th,
+  .animales-table td {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+
+  .animales-table th {
+    white-space: nowrap;
+  }
+}
